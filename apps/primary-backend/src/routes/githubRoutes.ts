@@ -86,4 +86,58 @@ const saveTokenToDB = async (user_id: string, code: string): Promise<boolean> =>
 
 }
 
+
+router.get('/get-repos', async (req: Request, res: Response) => {
+
+    //TODO: Implement extracting the user_id from the authorization token present in request headers
+    const accessToken: string | null = await getUserGithubAccessToken(req.query.user_id as string)
+    if(!accessToken) {
+        return res.status(404).json({
+            success: false,
+            error: 'Not github access token found of the user'
+        })
+    }
+
+    try{
+        
+        const repos = await axios.get('https://api.github.com/user/repos', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/vnd.github.v3+json'
+            }
+        })
+
+        return res.status(200).json({
+            success: true,
+            data: repos.data
+        })
+
+    } catch (e) {
+        return res.status(500).json({
+            success: false,
+            error: 'Some server error occured'
+        })
+    }
+
+})
+
+const getUserGithubAccessToken = async (user_id: string): Promise<string | null> => {
+
+    console.log(user_id)
+
+    try{
+        const token = await prisma.user.findUnique({where: {
+            id: user_id
+        }})
+        if(!token?.github_access_token) {
+            return null
+        }
+        return token?.github_access_token
+    } catch(e) {
+        console.log(e);
+        return null
+    }
+
+}
+
 export default router
