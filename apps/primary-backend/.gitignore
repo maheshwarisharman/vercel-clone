@@ -5,7 +5,6 @@ node_modules
 out
 dist
 *.tgz
-DATABASE_URL="postgresql://neondb_owner:npg_FhWVd7GzeY0Q@ep-tight-meadow-a5ququg4-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 # code coverage
 coverage
 *.lcov
