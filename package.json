@@ -20,5 +20,10 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "@types/axios": "^0.14.4",
+    "axios": "^1.13.5",
+    "dotenv": "^17.3.1"
+  }
 }
