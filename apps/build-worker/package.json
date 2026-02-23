@@ -8,5 +8,14 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --compile --minify --outfile dist/worker",
+    "start": "./dist/worker"
+  },
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "execa": "^9.6.1"
   }
 }
