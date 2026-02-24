@@ -23,7 +23,7 @@ export async function runBuildInContainer(job: BuildJob) {
             '--detach',
             '--name', containerId,
             '--memory', '2g',
-            '--cpus', '1.5g',
+            '--cpus', '1.5',
             '--security-opt', 'no-new-privileges',
             BUILDER_IMAGE,
             'sleep', 'infinity'
@@ -42,7 +42,7 @@ export async function runBuildInContainer(job: BuildJob) {
 
         //install all the node dependencies
         await dockerExec(containerId, [
-        'npm', 'ci',            // `ci` is faster and stricter than `install` — uses lockfile exactly
+        'npm', 'ci',         
         '--prefix', repoDir,
         ])
 
@@ -63,6 +63,7 @@ export async function runBuildInContainer(job: BuildJob) {
         localArtifactPath,
         ]);
 
+        console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
         return path.join(localArtifactPath, job.buildOutDir);
 
 
