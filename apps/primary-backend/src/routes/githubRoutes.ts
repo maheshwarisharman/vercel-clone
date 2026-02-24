@@ -86,7 +86,9 @@ const saveTokenToDB = async (user_id: string, code: string): Promise<boolean> =>
 
 }
 
-
+/*
+ * GET /get-repos - Get all the user repos using their access token stored in the database
+ */
 router.get('/get-repos', async (req: Request, res: Response) => {
 
     //TODO: Implement extracting the user_id from the authorization token present in request headers

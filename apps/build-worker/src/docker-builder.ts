@@ -3,12 +3,13 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
+import type { BuildJob } from './types.js';
 
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
 
 
-export async function runBuildInContainer(job) {
+export async function runBuildInContainer(job: BuildJob) {
 
     const containerId = `build-${randomUUID()}`;
     const repoDir = `${CONTAINER_WORKSPACE}/${job.repoName}`;
@@ -23,21 +24,82 @@ export async function runBuildInContainer(job) {
             '--name', containerId,
             '--memory', '2g',
             '--cpus', '1.5g',
-            '--network', 'none',
             '--security-opt', 'no-new-privileges',
             BUILDER_IMAGE,
             'sleep', 'infinity'
         ]) 
 
-        const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job.gitToken);
+        const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job.gitToken)
+
+        //Clone the Git Repo inside running container
+        await dockerExec(containerId, [
+            'git', 'clone',
+            '--depth', '1',
+            '--single-branch',
+            cloneUrl,
+            repoDir,
+        ])
+
+        //install all the node dependencies
+        await dockerExec(containerId, [
+        'npm', 'ci',            // `ci` is faster and stricter than `install` — uses lockfile exactly
+        '--prefix', repoDir,
+        ])
+
+        //Run the Actual Build CMD
+        await dockerExec(containerId, [
+        'npm', 'run', job.buildCommand,
+        '--prefix', repoDir,
+        ])
+
+
+
+        const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
+        await fs.mkdir(localArtifactPath, { recursive: true });
+    
+        await execa('docker', [
+        'cp',
+        `${containerId}:${artifactDirInContainer}`,
+        localArtifactPath,
+        ]);
+
+        return path.join(localArtifactPath, job.buildOutDir);
+
 
     } catch (e) {
+
+        console.error("There was some error in building the project:- ", e)
+
+    } finally {
+
+        await cleanupContainer(containerId);
 
     }
 
 }
 
-export function buildAuthenticatedUrl(repoUrl: string, gitToken: string): string {
+async function dockerExec(containerId: string, cmd: string[]) {
+  const result = await execa('docker', ['exec', containerId, ...cmd], {
+    all: true, 
+  }).catch(err => {
+    // Re-throw with more context for upstream error handling
+    throw new Error(
+      `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
+    );
+  });
+
+  return result;
+}
+
+async function cleanupContainer(containerId: string) {
+  try {
+    await execa('docker', ['rm', '--force', containerId]);
+  } catch {
+    console.warn(`[docker] Failed to remove container ${containerId} — may need manual cleanup`);
+  }
+}
+
+function buildAuthenticatedUrl(repoUrl: string, gitToken: string): string {
 
     if (!gitToken) return repoUrl;
     const url = new URL(repoUrl);
