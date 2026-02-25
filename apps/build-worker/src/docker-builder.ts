@@ -5,12 +5,21 @@ import fs from 'fs/promises';
 import os from 'os';
 import type { BuildJob } from './types.js';
 import { uploadDirectoryToS3 } from './upload-on-s3.js'
+import { prisma } from '@repo/db'
 
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
 
 
 export async function runBuildInContainer(job: BuildJob) {
+
+    const buildLogs: string[] = [];
+
+    const onLog = (logLine: string) => {
+      //TODO: Stream these logs in realtime through websockets to the frontend
+      buildLogs.push(logLine);  
+      console.log(logLine);
+    }
 
     const containerId = `build-${randomUUID()}`;
     const repoDir = `${CONTAINER_WORKSPACE}/${job.repoName}`;
@@ -51,9 +60,10 @@ export async function runBuildInContainer(job: BuildJob) {
         await dockerExec(containerId, [
         'npm', 'run', job.buildCommand,
         '--prefix', repoDir,
-        ])
+        ], onLog)
 
 
+        await writeLogsToDB(job.id, buildLogs)
 
         const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
         await fs.mkdir(localArtifactPath, { recursive: true });
@@ -85,17 +95,43 @@ export async function runBuildInContainer(job: BuildJob) {
 
 }
 
-async function dockerExec(containerId: string, cmd: string[]) {
-  const result = await execa('docker', ['exec', containerId, ...cmd], {
-    all: true, 
-  }).catch(err => {
-    // Re-throw with more context for upstream error handling
-    throw new Error(
-      `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
-    );
-  });
+async function writeLogsToDB(deploymentId: number, logs: string[]) {
 
-  return result;
+  const allLogs = logs.join()
+  try {
+    return await prisma.deployment.update({
+      where: {
+        deployment_id: deploymentId
+      },
+      data: {
+        build_logs: allLogs
+      }
+    })
+  } catch (e) {
+    console.error(e);
+    throw e
+  }
+
+}
+
+async function dockerExec(containerId: string, cmd: string[], onLog?: (line: string) => void) {
+
+    const child = execa('docker', ['exec', containerId, ...cmd], {
+      all: true,
+    })
+
+    // Stream lines in real-time
+    child.all?.on('data', (chunk: Buffer) => {
+      const lines = chunk.toString().split('\n').filter(Boolean);
+      lines.forEach(line => onLog?.(line));
+    })
+
+    return child.catch(err => {
+      throw new Error(
+        `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
+      );
+    })
+
 }
 
 async function cleanupContainer(containerId: string) {

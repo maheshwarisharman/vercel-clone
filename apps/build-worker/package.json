@@ -19,6 +19,7 @@
     "@aws-sdk/client-s3": "^3.996.0",
     "crypto": "^1.0.1",
     "execa": "^9.6.1",
-    "mime-types": "^3.0.2"
+    "mime-types": "^3.0.2",
+    "@repo/db": "*"
   }
 }

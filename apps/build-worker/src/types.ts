@@ -1,5 +1,5 @@
 export interface BuildJob {
-    id: string;
+    id: number;
     repoName: string;
     repoUrl: string;
     gitToken?: string;

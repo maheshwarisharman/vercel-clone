@@ -9,7 +9,7 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 const CONCURRENCY = 10
 
-export async function uploadDirectoryToS3(localDir: string, s3Prefix: string, bucket: string): Promise<boolean> {
+export async function uploadDirectoryToS3(localDir: string, s3Prefix: number, bucket: string): Promise<boolean> {
     const files = await getAllFiles(localDir)
 
     try {
@@ -24,7 +24,7 @@ export async function uploadDirectoryToS3(localDir: string, s3Prefix: string, bu
     }
 }
 
-async function uploadFile(filePath: string, baseDir: string, s3Prefix: string, bucket: string) {
+async function uploadFile(filePath: string, baseDir: string, s3Prefix: number, bucket: string) {
     const relativePath = path.relative(baseDir, filePath)
     const s3Key = `${s3Prefix}/${relativePath}`.replace(/\\/g, '/')
     const contentType = mimeLookup(filePath) || 'application/octet-stream'
