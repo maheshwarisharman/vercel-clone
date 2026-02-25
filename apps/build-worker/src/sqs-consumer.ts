@@ -4,7 +4,7 @@ import {
     DeleteMessageCommand,
     type Message,
 } from '@aws-sdk/client-sqs';
-import type { BuildJob } from './types.js';
+import type { BuildJob } from '@repo/types';
 import { runBuildInContainer } from './docker-builder.js';
 
 const sqs = new SQSClient({ region: process.env.AWS_REGION });
@@ -72,6 +72,20 @@ function parseJobFromMessage(message: Message): BuildJob {
         throw new Error(
             `Message ${message.MessageId} contains an invalid BuildJob payload`
         );
+    }
+
+    // Validate optional envVars — must be a plain object with string values
+    if (payload.envVars !== undefined) {
+        if (
+            typeof payload.envVars !== 'object' ||
+            payload.envVars === null ||
+            Array.isArray(payload.envVars) ||
+            !Object.values(payload.envVars).every((v: unknown) => typeof v === 'string')
+        ) {
+            throw new Error(
+                `Message ${message.MessageId} contains invalid envVars — expected Record<string, string>`
+            );
+        }
     }
 
     return payload as BuildJob;

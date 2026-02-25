@@ -5,4 +5,5 @@ export interface BuildJob {
     gitToken?: string;
     buildCommand: string;
     buildOutDir: string;
+    envVars?: Record<string, string>;
 }

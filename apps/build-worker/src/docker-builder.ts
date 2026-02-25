@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
-import type { BuildJob } from './types.js';
+import type { BuildJob } from '@repo/types';
 import { uploadDirectoryToS3 } from './upload-on-s3.js'
 import { prisma } from '@repo/db'
 
@@ -13,85 +13,99 @@ const CONTAINER_WORKSPACE = '/workspace';
 
 export async function runBuildInContainer(job: BuildJob) {
 
-    const buildLogs: string[] = [];
+  const buildLogs: string[] = [];
 
-    const onLog = (logLine: string) => {
-      //TODO: Stream these logs in realtime through websockets to the frontend
-      buildLogs.push(logLine);  
-      console.log(logLine);
+  const onLog = (logLine: string) => {
+    //TODO: Stream these logs in realtime through websockets to the frontend
+    buildLogs.push(logLine);
+    console.log(logLine);
+  }
+
+  const containerId = `build-${randomUUID()}`;
+  const repoDir = `${CONTAINER_WORKSPACE}/${job.repoName}`;
+
+  const localArtifactPath = path.join(os.tmpdir(), containerId);
+
+  try {
+
+    await execa('docker', [
+      'run',
+      '--detach',
+      '--name', containerId,
+      '--memory', '2g',
+      '--cpus', '1.5',
+      '--security-opt', 'no-new-privileges',
+      BUILDER_IMAGE,
+      'sleep', 'infinity'
+    ])
+
+    const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job?.gitToken)
+
+    //Clone the Git Repo inside running container
+    await dockerExec(containerId, [
+      'git', 'clone',
+      '--depth', '1',
+      '--single-branch',
+      cloneUrl,
+      repoDir,
+    ])
+
+    //install all the node dependencies
+    await dockerExec(containerId, [
+      'npm', 'ci',
+      '--prefix', repoDir,
+    ])
+
+    // Write environment variables to .env file inside the container
+    if (job.envVars && Object.keys(job.envVars).length > 0) {
+      const envFileContent = Object.entries(job.envVars)
+        .map(([key, value]) => `${key}=${value}`)
+        .join('\n');
+
+      await dockerExec(containerId, [
+        'sh', '-c',
+        `printf '%s' '${envFileContent.replace(/'/g, "'\\''")}' > ${repoDir}/.env`,
+      ]);
+
+      onLog(`[build] Injected ${Object.keys(job.envVars).length} env variable(s) into .env`);
     }
 
-    const containerId = `build-${randomUUID()}`;
-    const repoDir = `${CONTAINER_WORKSPACE}/${job.repoName}`;
-
-    const localArtifactPath = path.join(os.tmpdir(), containerId);
-
-    try {
-
-        await execa('docker', [
-            'run',
-            '--detach',
-            '--name', containerId,
-            '--memory', '2g',
-            '--cpus', '1.5',
-            '--security-opt', 'no-new-privileges',
-            BUILDER_IMAGE,
-            'sleep', 'infinity'
-        ]) 
-
-        const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job?.gitToken)
-
-        //Clone the Git Repo inside running container
-        await dockerExec(containerId, [
-            'git', 'clone',
-            '--depth', '1',
-            '--single-branch',
-            cloneUrl,
-            repoDir,
-        ])
-
-        //install all the node dependencies
-        await dockerExec(containerId, [
-        'npm', 'ci',         
-        '--prefix', repoDir,
-        ])
-
-        //Run the Actual Build CMD
-        await dockerExec(containerId, [
-        'npm', 'run', job.buildCommand,
-        '--prefix', repoDir,
-        ], onLog)
+    //Run the Actual Build CMD
+    await dockerExec(containerId, [
+      'npm', 'run', job.buildCommand,
+      '--prefix', repoDir,
+    ], onLog)
 
 
-        await writeLogsToDB(job.id, buildLogs)
+    await writeLogsToDB(job.id, buildLogs)
 
-        const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
-        await fs.mkdir(localArtifactPath, { recursive: true });
-    
-        await execa('docker', [
-        'cp',
-        `${containerId}:${artifactDirInContainer}`,
-        localArtifactPath,
-        ]);
+    const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
+    await fs.mkdir(localArtifactPath, { recursive: true });
 
-        console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
-        const tmpPath = path.join(localArtifactPath, job.buildOutDir);
+    await execa('docker', [
+      'cp',
+      `${containerId}:${artifactDirInContainer}`,
+      localArtifactPath,
+    ]);
 
-        const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, 'vercelclone-test')
-        if(uploadStatus) {
-          return console.log("Directly Uploaded to s3 successfully!")
-        }
-        return console.error("Upload Failed")
-        
-    } catch (e) {
+    console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
+    const tmpPath = path.join(localArtifactPath, job.buildOutDir);
 
-        console.error("There was some error in building the project:- ", e)
-
-    } finally {
-
-        await cleanupContainer(containerId);
-
+    const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, 'vercelclone-test')
+    if (uploadStatus) {
+      return console.log("Directly Uploaded to s3 successfully!")
     }
+    return console.error("Upload Failed")
+
+  } catch (e) {
+
+    console.error("There was some error in building the project:- ", e)
+
+  } finally {
+
+    await cleanupContainer(containerId);
+
+  }
 
 }
 
@@ -116,21 +130,21 @@ async function writeLogsToDB(deploymentId: number, logs: string[]) {
 
 async function dockerExec(containerId: string, cmd: string[], onLog?: (line: string) => void) {
 
-    const child = execa('docker', ['exec', containerId, ...cmd], {
-      all: true,
-    })
+  const child = execa('docker', ['exec', containerId, ...cmd], {
+    all: true,
+  })
 
-    // Stream lines in real-time
-    child.all?.on('data', (chunk: Buffer) => {
-      const lines = chunk.toString().split('\n').filter(Boolean);
-      lines.forEach(line => onLog?.(line));
-    })
+  // Stream lines in real-time
+  child.all?.on('data', (chunk: Buffer) => {
+    const lines = chunk.toString().split('\n').filter(Boolean);
+    lines.forEach(line => onLog?.(line));
+  })
 
-    return child.catch(err => {
-      throw new Error(
-        `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
-      );
-    })
+  return child.catch(err => {
+    throw new Error(
+      `docker exec [${cmd[0]}] failed in container ${containerId}:\n${err.all}`
+    );
+  })
 
 }
 
@@ -144,9 +158,9 @@ async function cleanupContainer(containerId: string) {
 
 function buildAuthenticatedUrl(repoUrl: string, gitToken?: string): string {
 
-    if (!gitToken) return repoUrl;
-    const url = new URL(repoUrl);
-    url.username = gitToken;
-    return url.toString();
+  if (!gitToken) return repoUrl;
+  const url = new URL(repoUrl);
+  url.username = gitToken;
+  return url.toString();
 
 }

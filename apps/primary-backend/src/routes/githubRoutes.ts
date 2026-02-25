@@ -42,6 +42,8 @@ router.put('/auth', validate(githubAuthSchema), async (req: Request, res: Respon
                 error: 'No Access Token Found, Unauthorised'
             })
         }
+        console.log(accessToken);
+        
         //Save the token to DB
         const resFromDB: boolean = await saveTokenToDB(user_id, accessToken)
         if (resFromDB) {
