@@ -9,12 +9,18 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 const CONCURRENCY = 10
 
-export async function uploadDirectoryToS3(localDir: string, s3Prefix: string, bucket: string) {
+export async function uploadDirectoryToS3(localDir: string, s3Prefix: string, bucket: string): Promise<boolean> {
     const files = await getAllFiles(localDir)
 
-    for (let i = 0; i < files.length; i++) {
+    try {
+    for (let i = 0; i < files.length; i+=CONCURRENCY) {
         const batch = files.slice(i, i + CONCURRENCY)
         await Promise.all(batch.map((file: string) => uploadFile(file, localDir, s3Prefix, bucket)))
+    }
+    return true 
+    } catch (e) {
+        console.log(e);
+        return false
     }
 }
 

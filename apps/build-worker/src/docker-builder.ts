@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
 import type { BuildJob } from './types.js';
+import { uploadDirectoryToS3 } from './upload-on-s3.js'
 
 const BUILDER_IMAGE = 'build-worker:latest';
 const CONTAINER_WORKSPACE = '/workspace';
@@ -29,7 +30,7 @@ export async function runBuildInContainer(job: BuildJob) {
             'sleep', 'infinity'
         ]) 
 
-        const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job.gitToken)
+        const cloneUrl = buildAuthenticatedUrl(job.repoUrl, job?.gitToken)
 
         //Clone the Git Repo inside running container
         await dockerExec(containerId, [
@@ -64,9 +65,14 @@ export async function runBuildInContainer(job: BuildJob) {
         ]);
 
         console.log("Artifacts are copied to:- ", path.join(localArtifactPath, job.buildOutDir))
-        return path.join(localArtifactPath, job.buildOutDir);
+        const tmpPath = path.join(localArtifactPath, job.buildOutDir);
 
-
+        const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, 'vercelclone-test')
+        if(uploadStatus) {
+          return console.log("Directly Uploaded to s3 successfully!")
+        }
+        return console.error("Upload Failed")
+        
     } catch (e) {
 
         console.error("There was some error in building the project:- ", e)
@@ -100,7 +106,7 @@ async function cleanupContainer(containerId: string) {
   }
 }
 
-function buildAuthenticatedUrl(repoUrl: string, gitToken: string): string {
+function buildAuthenticatedUrl(repoUrl: string, gitToken?: string): string {
 
     if (!gitToken) return repoUrl;
     const url = new URL(repoUrl);
