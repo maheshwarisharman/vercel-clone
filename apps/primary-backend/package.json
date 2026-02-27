@@ -13,7 +13,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.999.0",
     "@repo/db": "*",
+    "@repo/types": "*",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -21,6 +23,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "primary-backend": "workspace:*",
     "zod": "^4.3.6"
   }
 }

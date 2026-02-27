@@ -29,7 +29,6 @@ model Project {
   user            User                   @relation(fields: [user_id], references: [id])
   created_at      DateTime               @default(now())
   github_url      String
-  installation_id String
   build_cmd       String
   output_dir      String
   build_branch    String
@@ -43,9 +42,9 @@ model Deployment {
   project_id       Int
   project          Project  @relation(fields: [project_id], references: [project_id])
   created_at       DateTime @default(now())
-  is_build_success Boolean
-  preview_url      String
-  build_logs       String
+  is_build_success Boolean?
+  preview_url      String?
+  build_logs       String?
 }
 
 model Project_ENV_Variables {
