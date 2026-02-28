@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, Router } from "express";
 import cors from 'cors'
+import {prisma} from '@repo/db'
 
 //v1 Routes
 import githubRoutes from './routes/githubRoutes.js'
@@ -15,6 +16,30 @@ app.get("/health", async (req: Request, res: Response) => {
         message: "Server is healthy"
     })
 });
+
+app.post('/add-user', async (req, res) => {
+    try {
+
+        const user = await prisma.user.create({
+            data: {
+                email: req.body.email,
+                name: req.body.name,
+                github_username: null,
+                github_user_id: null,
+                github_installation_id: null
+            }
+        })
+        res.status(200).json({
+            message: "User added successfully",
+            data: user
+        })
+    } catch (e) {
+        res.status(500).json({
+            message: "Some Error Occuered",
+            error: e
+        })
+    }
+})
 
 app.use('/api/v1/github', githubRoutes)
 

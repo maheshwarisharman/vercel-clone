@@ -59,6 +59,86 @@ async function getInstallationAccessToken(installationId: string): Promise<strin
 // ─── Routes ──────────────────────────────────────────────────────────
 
 /*
+ * POST /auth/callback - GitHub OAuth Callback
+ * Receives the authorization code and user_id from the frontend after the user
+ * approves the GitHub OAuth prompt. Exchanges the code for an access token,
+ * fetches the user's GitHub profile, and updates the existing user row.
+ *
+ * Expects: { user_id: string, code: string }
+ */
+router.post('/auth/callback', async (req: Request, res: Response) => {
+    const { user_id, code } = req.body
+
+    if (!user_id || !code) {
+        return res.status(400).json({
+            success: false,
+            error: 'user_id and code are required'
+        })
+    }
+
+    try {
+        // 1. Exchange the authorization code for an access token
+        const tokenResponse = await axios.post(
+            'https://github.com/login/oauth/access_token',
+            {
+                client_id: process.env.GITHUB_OAUTH_CLIENT_ID,
+                client_secret: process.env.GITHUB_OAUTH_CLIENT_SECRET,
+                code
+            },
+            {
+                headers: { Accept: 'application/json' }
+            }
+        )
+
+        const accessToken = tokenResponse.data.access_token
+
+        if (!accessToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid or expired authorization code'
+            })
+        }
+
+        // 2. Fetch the user's GitHub profile using the access token
+        const ghUser = await axios.get('https://api.github.com/user', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/vnd.github.v3+json'
+            }
+        })
+
+        const githubUsername: string = ghUser.data.login
+        const githubUserId: string = String(ghUser.data.id)
+
+        // 3. Update the existing user row with their GitHub identity
+        const user = await prisma.user.update({
+            where: { id: user_id },
+            data: {
+                github_username: githubUsername,
+                github_user_id: githubUserId
+            }
+        })
+
+        console.log(`[github-oauth] Linked GitHub user ${githubUsername} (id: ${githubUserId}) to user ${user_id}`)
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                github_username: user.github_username,
+                github_user_id: user.github_user_id
+            }
+        })
+
+    } catch (e) {
+        console.error('[github-oauth] Error during authentication:', e)
+        return res.status(500).json({
+            success: false,
+            error: 'GitHub authentication failed'
+        })
+    }
+})
+
+/*
  * POST /webhook - GitHub App Webhook Handler
  * Receives installation events when users install/uninstall the GitHub App.
  * Stores the installation_id linked to the user for future token generation.
@@ -66,6 +146,7 @@ async function getInstallationAccessToken(installationId: string): Promise<strin
 router.post('/webhook/github', async (req: Request, res: Response) => {
     const event = req.headers['x-github-event'] as string
     const { action, installation, sender } = req.body
+    const senderGithubUserId = String(sender.id)
 
     try {
         // We only care about installation-related events
@@ -79,9 +160,7 @@ router.post('/webhook/github', async (req: Request, res: Response) => {
 
                 await prisma.user.updateMany({
                     where: {
-                        // Match by the sender's GitHub username/email
-                        // You may want to adjust this matching logic based on your auth setup
-                        name: githubUsername
+                        github_user_id: senderGithubUserId
                     },
                     data: {
                         github_installation_id: installationId
