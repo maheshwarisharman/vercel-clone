@@ -93,8 +93,25 @@ export async function runBuildInContainer(job: BuildJob) {
 
     const uploadStatus = await uploadDirectoryToS3(tmpPath, job.id, 'vercelclone-test')
     if (uploadStatus) {
+      await prisma.deployment.update({
+        where: {
+          deployment_id: job.id
+        },
+        data: {
+          is_build_success: true,
+          preview_url: `https://${job.id}.dev.blitznative.com`
+        }
+      })
       return console.log("Directly Uploaded to s3 successfully!")
     }
+    await prisma.deployment.update({
+      where: {
+        deployment_id: job.id
+      },
+      data: {
+        is_build_success: false,
+      }
+    })
     return console.error("Upload Failed")
 
   } catch (e) {
