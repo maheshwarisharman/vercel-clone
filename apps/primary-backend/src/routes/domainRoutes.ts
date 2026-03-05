@@ -7,7 +7,6 @@ export default router
 
 router.get('/search/:domain_url', async (req, res) => {
     const domain_url: string = req.params.domain_url as string
-    console.log(domain_url);
     
 
     try {

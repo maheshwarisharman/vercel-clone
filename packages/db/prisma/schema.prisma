@@ -24,12 +24,12 @@ model User {
 }
 
 model Project {
-  project_id     Int                    @id @default(autoincrement())
+  project_id     Int          @id @default(autoincrement())
   name           String
   description    String?
   user_id        String
-  user           User                   @relation(fields: [user_id], references: [id])
-  created_at     DateTime               @default(now())
+  user           User         @relation(fields: [user_id], references: [id])
+  created_at     DateTime     @default(now())
   github_url     String
   build_cmd      String
   output_dir     String
@@ -48,4 +48,13 @@ model Deployment {
   is_build_success Boolean?
   preview_url      String?
   build_logs       String?
+}
+
+model Domain {
+  id              String   @id @default(cuid())
+  domain_url      String   @unique
+  deployment_id   Int?
+  last_updated_at DateTime @default(now())
+
+  @@index([domain_url])
 }

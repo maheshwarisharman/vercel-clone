@@ -82,7 +82,6 @@ export async function runBuildInContainer(job: BuildJob) {
     ], onLog)
 
 
-    await writeLogsToDB(job.id, buildLogs)
 
     const artifactDirInContainer = `${repoDir}/${job.buildOutDir}`;
     await fs.mkdir(localArtifactPath, { recursive: true });
@@ -125,6 +124,7 @@ export async function runBuildInContainer(job: BuildJob) {
 
   } finally {
 
+    await writeLogsToDB(job.id, buildLogs)
     await cleanupContainer(containerId);
 
   }
