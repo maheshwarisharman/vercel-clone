@@ -58,3 +58,39 @@ model Domain {
 
   @@index([domain_url])
 }
+
+
+model CustomDomain {
+  id                String              @id @default(cuid())
+  domain            String              @unique
+  deployment_id     Int
+  cert_arn          String?
+  cert_status       CertStatus          @default(PENDING)
+  cert_cname_key    String?          
+  cert_cname_value  String?         
+  cdn_status        CdnStatus           @default(PENDING)
+  status            CustomDomainStatus  @default(AWAITING_DNS)
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+}
+
+enum CustomDomainStatus {
+  AWAITING_DNS  
+  CERT_VALIDATING
+  CERT_ISSUED
+  CDN_UPDATING
+  ACTIVE
+  FAILED
+}
+
+enum CertStatus { 
+ PENDING
+ ISSUED 
+ FAILED 
+}
+enum CdnStatus  { 
+  PENDING 
+  UPDATING 
+  ACTIVE 
+  FAILED 
+}
