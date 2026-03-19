@@ -7,10 +7,14 @@ import githubRoutes from './routes/githubRoutes.js'
 import deployProjectRoutes from './routes/deployProject.js'
 import domainRoutes from './routes/domainRoutes.js'
 import projectRoutes from './routes/projectRoutes.js'
+import { ACMCronJob } from "./handlers/acmCertCron.js";
 
 const app: Express = express()
 app.use(cors())
 app.use(express.json())
+
+//Start the ACM Polling Cron Job
+ACMCronJob()
 
 
 app.get("/health", async (req: Request, res: Response) => {

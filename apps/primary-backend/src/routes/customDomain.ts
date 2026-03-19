@@ -19,7 +19,7 @@ router.post('/add-new-domain', async (req, res) => {
 
         const certificateArn = await requestCertificate(sanitizedDomain)
 
-        const created_domain_row = await prisma.customDomain.create({
+       await prisma.customDomain.create({
             data: {
                 domain: sanitizedDomain,
                 project_id,
@@ -28,7 +28,6 @@ router.post('/add-new-domain', async (req, res) => {
                 status: 'AWAITING_DNS'
             }
         })
-        handleAcmCertCron(created_domain_row.id, created_domain_row.cert_arn as string, created_domain_row.cert_cname_key)
 
         res.status(200).json({ success: true });
 
