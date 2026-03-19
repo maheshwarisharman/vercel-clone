@@ -63,7 +63,7 @@ model Domain {
 model CustomDomain {
   id                String              @id @default(cuid())
   domain            String              @unique
-  deployment_id     Int
+  project_id        Int
   cert_arn          String?
   cert_status       CertStatus          @default(PENDING)
   cert_cname_key    String?          
