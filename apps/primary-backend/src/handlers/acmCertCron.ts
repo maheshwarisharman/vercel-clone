@@ -1,14 +1,20 @@
 import { prisma } from "@repo/db";
-import { getCertificateDetails } from "./awsCustomDomain.js";
+import { attachDomainToCloudFront, getCertificateDetails } from "./awsCustomDomain.js";
 
-export async function handleAcmCertCron(domain_id: string, cert_arn: string, cert_cname_key: string | null) {
+export async function handleAcmCertCron(domain_id: string, cert_arn: string, cert_cname_key: string | null, domain: string) {
     
         const { status, cnameKey, cnameValue } = await getCertificateDetails(cert_arn);
 
         if (status === "ISSUED") {
-        // advance to next state
+          try {
+            await attachDomainToCloudFront(domain, cert_arn);
+          } catch (error) {
+            console.error(error);
+            throw error;
+          }
         }
 
+  
         if (cnameKey && !cert_cname_key) {
             try {
             await prisma.customDomain.update({
@@ -29,10 +35,12 @@ export async function handleAcmCertCron(domain_id: string, cert_arn: string, cer
 }
 
 export function ACMCronJob() {
-    setInterval(async () => {
-        const pendingDomains = await prisma.customDomain.findMany({
+  setInterval(async () => {
+      
+    const pendingDomains = await prisma.customDomain.findMany({
             where: { status: { in: ['AWAITING_DNS', 'CERT_VALIDATING'] } }
     })
-    await Promise.allSettled(pendingDomains.map(domain => handleAcmCertCron(domain.id, domain.cert_arn as string, domain.cert_cname_key)))
+    await Promise.allSettled(pendingDomains.map(domain => handleAcmCertCron(domain.id, domain.cert_arn as string, domain.cert_cname_key, domain.domain)))
+      
     }, 60000)
 }

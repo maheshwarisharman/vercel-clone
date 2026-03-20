@@ -1,6 +1,10 @@
 import { ACMClient, RequestCertificateCommand, DescribeCertificateCommand } from "@aws-sdk/client-acm";
+import { CloudFrontClient, GetDistributionConfigCommand, UpdateDistributionCommand } from "@aws-sdk/client-cloudfront";
+
 
 const acm = new ACMClient({ region: "us-east-1" });
+const cloudfront = new CloudFrontClient({ region: "us-east-1" });
+
 
 export async function requestCertificate(domain: string): Promise<string> {
   const command = new RequestCertificateCommand({
@@ -16,6 +20,42 @@ export async function requestCertificate(domain: string): Promise<string> {
   }
 
   return response.CertificateArn;
+}
+
+export async function attachDomainToCloudFront(domain: string, certArn: string) {
+  const DISTRIBUTION_ID = process.env.CLOUDFRONT_DISTRIBUTION_ID!;
+
+  const { DistributionConfig, ETag } = await cloudfront.send(
+    new GetDistributionConfigCommand({ Id: DISTRIBUTION_ID })
+  );
+
+  if (!DistributionConfig || !ETag) throw new Error("Could not fetch distribution config");
+
+  const existingAliases = DistributionConfig.Aliases?.Items ?? [];
+
+  if (existingAliases.includes(domain)) return;
+
+  const newAliases = [...existingAliases, domain];
+
+  //Update distribution
+  await cloudfront.send(
+    new UpdateDistributionCommand({
+      Id: DISTRIBUTION_ID,
+      IfMatch: ETag, // optimistic locking — prevents race conditions
+      DistributionConfig: {
+        ...DistributionConfig,
+        Aliases: {
+          Quantity: newAliases.length,
+          Items: newAliases,
+        },
+        ViewerCertificate: {
+          ACMCertificateArn: certArn,
+          SSLSupportMethod: "sni-only",
+          MinimumProtocolVersion: "TLSv1.2_2021",
+        },
+      },
+    })
+  );
 }
 
 
