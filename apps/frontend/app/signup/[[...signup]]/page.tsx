@@ -2,6 +2,7 @@ import { SignUp } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 
 export default function SignUpPage() {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground relative">
       {/* Background decorations - Vercel style subtle grid */}
@@ -20,6 +21,7 @@ export default function SignUpPage() {
           <SignUp 
             routing="path"
             path="/signup"
+            forceRedirectUrl="/post-signup"
           />
         </div>
       </main>
