@@ -173,6 +173,7 @@ router.post('/auth/callback', requireAuth(), async (req: Request, res: Response)
 
 
 router.get('/is-github-linked', requireAuth(), async(req: Request, res: Response) => {
+    console.log("GHGEGYEEY")
     const auth = getAuth(req);
     const clerkUserId = auth.userId;
 

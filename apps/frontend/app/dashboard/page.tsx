@@ -12,6 +12,7 @@ export default function DashboardPage() {
     const { getToken } = useAuth();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
+    const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME
 
     const [projects, setProjects] = useState([])
 
@@ -38,11 +39,12 @@ export default function DashboardPage() {
                     Authorization: `Bearer ${token}`
                 }
             })
-            console.log(response.data)
-            if(response.data.success) {
-                
+            if (response.data.success) {
+                // TODO: GitHub is already linked — open the import-repository flow
             } else {
-              
+                // GitHub is not linked — send user to GitHub App installation page.
+                // GitHub will redirect back to /github-callback with a `code` query param.
+                window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`
             }
         } catch (error) {
             console.error("Error checking github link:", error)
