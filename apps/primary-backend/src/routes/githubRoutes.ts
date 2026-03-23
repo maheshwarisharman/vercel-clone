@@ -99,6 +99,8 @@ router.post('/auth/callback', requireAuth(), async (req: Request, res: Response)
             }
         )
 
+        console.log('[github-oauth] token response:', tokenResponse.data)
+
         const accessToken = tokenResponse.data.access_token
 
         if (!accessToken) {
@@ -107,6 +109,7 @@ router.post('/auth/callback', requireAuth(), async (req: Request, res: Response)
                 error: 'Invalid or expired authorization code'
             })
         }
+
 
         // 2. Fetch the user's GitHub profile using the access token
         const ghUser = await axios.get('https://api.github.com/user', {

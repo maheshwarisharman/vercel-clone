@@ -7,14 +7,17 @@ import { Search, Github, MoreHorizontal, ExternalLink } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function DashboardPage() {
-    const { getToken } = useAuth();
+    const { getToken, userId } = useAuth();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
     const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME
 
     const [projects, setProjects] = useState([])
+    const [githubRepos, setGithubRepos] = useState<any[]>([])
+    const [isModalOpen, setIsModalOpen] = useState(false)
 
 
     const fetchProject = async () => {
@@ -40,7 +43,16 @@ export default function DashboardPage() {
                 }
             })
             if (response.data.success) {
-                // TODO: GitHub is already linked — open the import-repository flow
+                // GitHub is already linked — open the import-repository flow
+                const reposRes = await axios.get(`${API_BASE_URL}/github/get-repos?user_id=${userId}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+                if (reposRes.data.success) {
+                    setGithubRepos(reposRes.data.data)
+                    setIsModalOpen(true)
+                }
             } else {
                 // GitHub is not linked — send user to GitHub App installation page.
                 // GitHub will redirect back to /github-callback with a `code` query param.
@@ -111,6 +123,33 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-y-auto bg-background text-foreground border-border">
+          <DialogHeader>
+            <DialogTitle>Import GitHub Repository</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            {githubRepos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No repositories found.</p>
+            ) : (
+              githubRepos.map((repo: any) => (
+                <div key={repo.id} className="flex flex-row items-center justify-between p-4 border border-border rounded-md hover:bg-neutral-900 transition-colors">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-semibold flex items-center gap-2">
+                      <Github className="w-4 h-4" /> {repo.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{repo.private ? "Private" : "Public"} • {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString() : ""}</span>
+                  </div>
+                  <Button variant="secondary" size="sm" className="h-8">
+                    Import
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
