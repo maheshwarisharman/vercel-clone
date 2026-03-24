@@ -125,7 +125,7 @@ export async function runBuildInContainer(job: BuildJob) {
   } finally {
 
     await writeLogsToDB(job.id, buildLogs)
-    // await cleanupContainer(containerId);
+    await cleanupContainer(containerId);
 
   }
 
