@@ -4,6 +4,7 @@ import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { validate } from '../middleware/validate.middleware.js'
 import { createNewProjectSchema, createDeploymentSchema } from "../schemas/deployment.schema.js";
 import type { BuildJob } from '@repo/types'
+import { getAuth } from "@clerk/express";
 
 const router: Router = Router()
 
@@ -12,13 +13,25 @@ const QUEUE_URL = process.env.SQS_QUEUE_URL!
 
 router.post('/create-project', validate(createNewProjectSchema), async (req, res) => {
 
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
+
+
+    console.log("Clerk Id", clerkUserId)
+
+    if (!clerkUserId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const body = req.body
     console.log(body)
 
     try {
         const project = await prisma.project.create({
             data: {
-                user_id: body.user_id,
+                user_id: clerkUserId,
                 name: body.name,
                 description: body.description,
                 github_url: body.github_url,

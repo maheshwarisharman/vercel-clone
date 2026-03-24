@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Github, MoreHorizontal, ExternalLink } from "lucide-react";
+import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
@@ -18,6 +18,22 @@ export default function DashboardPage() {
     const [projects, setProjects] = useState([])
     const [githubRepos, setGithubRepos] = useState<any[]>([])
     const [isModalOpen, setIsModalOpen] = useState(false)
+    const [isLoadingNewProject, setIsLoadingNewProject] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+    const [configModalOpen, setConfigModalOpen] = useState(false)
+    const [selectedRepo, setSelectedRepo] = useState<any>(null)
+    const [projectConfig, setProjectConfig] = useState({
+        name: "",
+        description: "",
+        github_url: "",
+        build_cmd: "npm run build",
+        output_dir: "dist",
+        repoName: "",
+        build_branch: "main",
+        primary_domain: "",
+        project_envs: []
+    })
 
 
     const fetchProject = async () => {
@@ -35,6 +51,8 @@ export default function DashboardPage() {
     }, [])
 
     const handleAddNewProject = async () => {
+        setIsLoadingNewProject(true);
+        setErrorMsg(null);
         try {
             const token = await getToken();
             const response = await axios.get(`${API_BASE_URL}/github/is-github-linked`, {
@@ -50,17 +68,39 @@ export default function DashboardPage() {
                     }
                 })
                 if (reposRes.data.success) {
-                    setGithubRepos(reposRes.data.data)
+                    setGithubRepos(reposRes.data.data.reverse())
                     setIsModalOpen(true)
+                } else {
+                    setErrorMsg("Failed to fetch repositories.");
                 }
             } else {
                 // GitHub is not linked — send user to GitHub App installation page.
                 // GitHub will redirect back to /github-callback with a `code` query param.
                 window.location.href = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error checking github link:", error)
+            setErrorMsg(error?.response?.data?.message || error?.message || "An error occurred while connecting to GitHub.");
+        } finally {
+            setIsLoadingNewProject(false);
         }
+    }
+
+    const handleImportClick = (repo: any) => {
+        setSelectedRepo(repo);
+        setProjectConfig({
+            name: repo.name,
+            description: repo.description || "",
+            github_url: repo.html_url,
+            build_cmd: "npm run build",
+            output_dir: "dist",
+            repoName: repo.full_name,
+            build_branch: repo.default_branch || "main",
+            primary_domain: "",
+            project_envs: []
+        });
+        setIsModalOpen(false); // Close repos modal
+        setConfigModalOpen(true); // Open config modal
     }
 
   return (
@@ -74,10 +114,28 @@ export default function DashboardPage() {
             className="w-full sm:w-80 pl-9 h-10 border-border bg-background" 
           />
         </div>
-        <Button onClick={handleAddNewProject} className="h-10 px-4 bg-foreground text-background hover:bg-neutral-200 font-medium w-full sm:w-auto">
-          Add New...
+        <Button 
+          onClick={handleAddNewProject} 
+          disabled={isLoadingNewProject}
+          className="h-10 px-4 bg-foreground text-background hover:bg-neutral-200 font-medium w-full sm:w-auto"
+        >
+          {isLoadingNewProject ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            "Add New..."
+          )}
         </Button>
       </div>
+
+      {errorMsg && (
+        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-500 text-sm">
+          <AlertCircle className="h-4 w-4" />
+          {errorMsg}
+        </div>
+      )}
 
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -141,13 +199,97 @@ export default function DashboardPage() {
                     </span>
                     <span className="text-xs text-muted-foreground">{repo.private ? "Private" : "Public"} • {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString() : ""}</span>
                   </div>
-                  <Button variant="secondary" size="sm" className="h-8">
+                  <Button variant="secondary" size="sm" className="h-8" onClick={() => handleImportClick(repo)}>
                     Import
                   </Button>
                 </div>
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={configModalOpen} onOpenChange={setConfigModalOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto bg-background text-foreground border-border">
+          <DialogHeader className="mb-2">
+            <DialogTitle className="text-xl font-semibold tracking-tight">Configure Project</DialogTitle>
+          </DialogHeader>
+
+          {selectedRepo && (
+            <div className="flex flex-col gap-6">
+              <div className="flex gap-4 items-center p-4 border border-border rounded-lg bg-neutral-900/30">
+                <Github className="w-8 h-8" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-semibold text-sm">{selectedRepo.full_name}</span>
+                  <span className="text-xs text-muted-foreground">{selectedRepo.private ? "Private" : "Public"} repository</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Project Name</label>
+                  <Input 
+                    value={projectConfig.name} 
+                    onChange={(e) => setProjectConfig({...projectConfig, name: e.target.value})} 
+                    className="border-border bg-background h-9" 
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Description <span className="text-muted-foreground font-normal">(optional)</span></label>
+                  <Input 
+                    value={projectConfig.description} 
+                    onChange={(e) => setProjectConfig({...projectConfig, description: e.target.value})} 
+                    className="border-border bg-background h-9" 
+                    placeholder="My awesome project..."
+                  />
+                </div>
+
+                <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
+                  <h3 className="text-sm font-semibold tracking-tight">Build and Output Settings</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-medium text-muted-foreground">BUILD COMMAND</label>
+                      <Input 
+                        value={projectConfig.build_cmd} 
+                        onChange={(e) => setProjectConfig({...projectConfig, build_cmd: e.target.value})} 
+                        className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
+                        placeholder="npm run build"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-medium text-muted-foreground">OUTPUT DIRECTORY</label>
+                      <Input 
+                        value={projectConfig.output_dir} 
+                        onChange={(e) => setProjectConfig({...projectConfig, output_dir: e.target.value})} 
+                        className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
+                        placeholder="dist" 
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 md:col-span-2">
+                      <label className="text-xs font-medium text-muted-foreground">BRANCH TO DEPLOY</label>
+                      <Input 
+                        value={projectConfig.build_branch} 
+                        onChange={(e) => setProjectConfig({...projectConfig, build_branch: e.target.value})} 
+                        className="border-border bg-neutral-900/50 font-mono text-sm h-9" 
+                        placeholder="main" 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="ghost" onClick={() => setConfigModalOpen(false)}>Cancel</Button>
+                <Button className="bg-foreground text-background hover:bg-neutral-200 min-w-24">
+                  Deploy
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
