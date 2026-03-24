@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X } from "lucide-react";
+import { Search, Github, MoreHorizontal, ExternalLink, Loader2, AlertCircle, X, Check } from "lucide-react";
 import axios from "axios"
 import  {useEffect, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
@@ -37,6 +37,41 @@ export default function DashboardPage() {
 
     const [envKey, setEnvKey] = useState("")
     const [envVal, setEnvVal] = useState("")
+    const [isDeploying, setIsDeploying] = useState(false)
+    const [deployError, setDeployError] = useState<string | null>(null)
+    const [isCheckingDomain, setIsCheckingDomain] = useState(false);
+    const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
+    const [domainError, setDomainError] = useState<string | null>(null);
+
+    const handleCheckDomain = async () => {
+        if (!projectConfig.primary_domain.trim()) {
+            setDomainAvailable(null);
+            setDomainError(null);
+            return;
+        }
+        
+        setIsCheckingDomain(true);
+        setDomainAvailable(null);
+        setDomainError(null);
+
+        try {
+            const token = await getToken();
+            await axios.get(`${API_BASE_URL}/domain/search/${projectConfig.primary_domain}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            setDomainAvailable(true);
+        } catch (error: any) {
+            if (error?.response?.status === 404) {
+                setDomainAvailable(false);
+            } else {
+                setDomainError("Error checking domain availability");
+            }
+        } finally {
+            setIsCheckingDomain(false);
+        }
+    };
 
 
     const fetchProject = async () => {
@@ -104,6 +139,8 @@ export default function DashboardPage() {
         });
         setEnvKey("");
         setEnvVal("");
+        setDomainAvailable(null);
+        setDomainError(null);
         setIsModalOpen(false); // Close repos modal
         setConfigModalOpen(true); // Open config modal
     }
@@ -124,6 +161,59 @@ export default function DashboardPage() {
             ...prev,
             project_envs: prev.project_envs.filter((_, i) => i !== index)
         }))
+    }
+
+    const handleDeploy = async () => {
+        setIsDeploying(true);
+        setDeployError(null);
+        try {
+            const token = await getToken();
+            const headers = { Authorization: `Bearer ${token}` };
+
+            // Convert env array [{key,value}] → Record<string,string> expected by backend
+            const envRecord = projectConfig.project_envs.reduce<Record<string, string>>(
+                (acc, { key, value }) => { acc[key] = value; return acc; },
+                {}
+            );
+
+            // Step 1 — create the project
+            const createRes = await axios.post(
+                `${API_BASE_URL}/deploy/create-project`,
+                {
+                    name: projectConfig.name,
+                    description: projectConfig.description,
+                    github_url: projectConfig.github_url,
+                    build_cmd: projectConfig.build_cmd,
+                    output_dir: projectConfig.output_dir,
+                    repoName: projectConfig.repoName,
+                    build_branch: projectConfig.build_branch,
+                    primary_domain: projectConfig.primary_domain,
+                    project_envs: envRecord,
+                },
+                { headers }
+            );
+
+            const projectId: number = createRes.data.data.project_id;
+
+            // Step 2 — trigger the first deployment
+            await axios.post(
+                `${API_BASE_URL}/deploy/create-deployment`,
+                { project_id: projectId },
+                { headers }
+            );
+
+            // Success — close modal and refresh projects list
+            setConfigModalOpen(false);
+            fetchProject();
+        } catch (error: any) {
+            const msg =
+                error?.response?.data?.message ||
+                error?.message ||
+                "An unexpected error occurred. Please try again.";
+            setDeployError(msg);
+        } finally {
+            setIsDeploying(false);
+        }
     }
 
   return (
@@ -269,6 +359,48 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
+                  <h3 className="text-sm font-semibold tracking-tight">Domain Setup</h3>
+                  <div className="flex flex-col gap-2">
+                      <label className="text-xs font-medium text-muted-foreground">PRIMARY DOMAIN</label>
+                      <div className="flex items-center gap-2">
+                        <Input 
+                          value={projectConfig.primary_domain} 
+                          onChange={(e) => {
+                             setProjectConfig({...projectConfig, primary_domain: e.target.value});
+                             if (domainAvailable !== null) setDomainAvailable(null);
+                             if (domainError !== null) setDomainError(null);
+                          }} 
+                          className={`flex-1 border-border bg-neutral-900/50 font-mono text-sm h-9 ${domainAvailable === false ? 'border-red-500/50 focus-visible:ring-red-500/50' : domainAvailable === true ? 'border-green-500/50 focus-visible:ring-green-500/50' : ''}`} 
+                          placeholder="example.com"
+                        />
+                        <Button
+                          variant="secondary"
+                          onClick={handleCheckDomain}
+                          disabled={!projectConfig.primary_domain.trim() || isCheckingDomain}
+                          className="h-9 px-4 shrink-0"
+                        >
+                          {isCheckingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : "Check"}
+                        </Button>
+                      </div>
+                      {domainAvailable === true && (
+                        <span className="text-xs text-green-500 font-medium flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Domain is available
+                        </span>
+                      )}
+                      {domainAvailable === false && (
+                        <span className="text-xs text-red-500 font-medium flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" /> Domain is already taken
+                        </span>
+                      )}
+                      {domainError && (
+                        <span className="text-xs text-red-500 font-medium flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" /> {domainError}
+                        </span>
+                      )}
+                  </div>
+                </div>
+
+                <div className="mt-2 border border-border rounded-lg bg-background p-4 flex flex-col gap-4">
                   <h3 className="text-sm font-semibold tracking-tight">Build and Output Settings</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -354,10 +486,28 @@ export default function DashboardPage() {
 
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="ghost" onClick={() => setConfigModalOpen(false)}>Cancel</Button>
-                <Button className="bg-foreground text-background hover:bg-neutral-200 min-w-24">
-                  Deploy
+              {deployError && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-500 text-sm">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{deployError}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="ghost" onClick={() => setConfigModalOpen(false)} disabled={isDeploying}>Cancel</Button>
+                <Button
+                  onClick={handleDeploy}
+                  disabled={isDeploying || !projectConfig.name.trim() || domainAvailable !== true || isCheckingDomain}
+                  className="bg-foreground text-background hover:bg-neutral-200 min-w-28"
+                >
+                  {isDeploying ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deploying...
+                    </>
+                  ) : (
+                    "Deploy"
+                  )}
                 </Button>
               </div>
             </div>

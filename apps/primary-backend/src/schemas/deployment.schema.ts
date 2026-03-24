@@ -7,7 +7,6 @@ export const createDeploymentSchema = z.object({
 export const createNewProjectSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
-    user_id: z.string(),
     github_url: z.url(),
     build_cmd: z.string(),
     output_dir: z.string(),
