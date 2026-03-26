@@ -8,6 +8,7 @@ import axios from "axios"
 import  {useEffect, useState} from "react"
 import { useAuth } from "@clerk/nextjs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import Link from "next/link";
 
 export default function DashboardPage() {
     const { getToken, userId } = useAuth();
@@ -15,7 +16,7 @@ export default function DashboardPage() {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
     const GITHUB_APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME
 
-    const [projects, setProjects] = useState([])
+    const [projects, setProjects] = useState<any[]>([])
     const [githubRepos, setGithubRepos] = useState<any[]>([])
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [isLoadingNewProject, setIsLoadingNewProject] = useState(false)
@@ -261,10 +262,12 @@ export default function DashboardPage() {
                   <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center font-bold text-[10px]">
                     N
                   </div>
-                  <CardTitle className="text-sm font-semibold tracking-tight">{project.name}</CardTitle>
+                  <Link href={`/project/${project.project_id}`}>
+                    <CardTitle className="text-sm font-semibold tracking-tight hover:underline cursor-pointer">{project.name}</CardTitle>
+                  </Link>
                 </div>
                 <CardDescription className="text-[13px] text-muted-foreground font-medium flex items-center gap-1.5 hover:text-foreground hover:underline cursor-pointer transition-colors max-w-fit">
-                  {project.url} <ExternalLink className="w-3 h-3" />
+                  {project.primary_domain} <ExternalLink className="w-3 h-3" />
                 </CardDescription>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-2 text-muted-foreground hover:text-foreground">
@@ -277,18 +280,18 @@ export default function DashboardPage() {
                   <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                   <span className="font-medium text-[13px]">Production</span>
                   <span className="text-neutral-600 px-1">•</span>
-                  <span className="text-[13px]">{project.timeAgo}</span>
+                  <span className="text-[13px]">{new Date(project.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
             </CardContent>
             <CardFooter className="p-5 border-t border-border bg-neutral-950/30 text-xs text-muted-foreground flex items-center justify-between">
               <div className="flex items-center gap-2 font-mono truncate max-w-[70%]">
                 <Github className="w-4 h-4 text-foreground shrink-0" />
-                <span className="truncate">{project.repo}</span>
+                <span className="truncate">{project.repoName}</span>
               </div>
               <div className="flex items-center gap-1.5 border border-border px-2 py-0.5 rounded-md bg-transparent text-[11px] font-mono shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 text-muted-foreground"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                {project.branch}
+                {project.build_branch}
               </div>
             </CardFooter>
           </Card>
