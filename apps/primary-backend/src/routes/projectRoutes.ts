@@ -56,6 +56,9 @@ router.post('/single', async (req, res) => {
         const project = await prisma.project.findUnique({
             where: {
                 project_id: req.body.project_id
+            },
+            include: {
+                deployments: true,
             }
         })
         if(project?.user_id !== clerkUserId) {

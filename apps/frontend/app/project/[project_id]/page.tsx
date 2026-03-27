@@ -6,8 +6,9 @@ import { useAuth } from "@clerk/nextjs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Github, ExternalLink, GitBranch, Terminal, Globe, Loader2, ArrowLeft, ArrowUpRight, Activity } from "lucide-react";
+import { Github, ExternalLink, GitBranch, Terminal, Globe, Loader2, ArrowLeft, ArrowUpRight, Activity, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function ProjectDetailsPage() {
     const params = useParams();
@@ -247,6 +248,88 @@ export default function ProjectDetailsPage() {
                         ) : (
                             <div className="text-center py-8 border border-dashed border-border rounded-lg bg-neutral-900/20">
                                 <p className="text-sm text-muted-foreground">No environment variables configured.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Deployments History */}
+                <Card className="col-span-1 md:col-span-3 bg-background border-border shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between pb-4">
+                        <div className="flex flex-col gap-1">
+                            <CardTitle className="text-lg font-semibold">Deployments</CardTitle>
+                            <CardDescription>Recent deployment history for this project.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {project.deployments && project.deployments.length > 0 ? (
+                            <div className="border border-border rounded-lg overflow-hidden">
+                                <div className="grid grid-cols-12 bg-neutral-900/80 p-3 text-xs font-medium text-muted-foreground border-b border-border">
+                                    <div className="col-span-3 md:col-span-3">STATUS</div>
+                                    <div className="col-span-4 md:col-span-3">PREVIEW URL</div>
+                                    <div className="hidden md:block md:col-span-3">BRANCH</div>
+                                    <div className="col-span-3 md:col-span-2 text-right">DATE</div>
+                                    <div className="col-span-2 md:col-span-1 text-right">LOGS</div>
+                                </div>
+                                <div className="divide-y divide-border">
+                                    {[...project.deployments].reverse().map((deployment: any) => (
+                                        <div key={deployment.deployment_id} className="grid grid-cols-12 p-3 text-sm hover:bg-neutral-900/30 transition-colors items-center">
+                                            <div className="col-span-3 md:col-span-3 flex items-center gap-2">
+                                                {deployment.is_build_success === true ? (
+                                                    <><CheckCircle className="w-4 h-4 text-green-500" /><span className="text-foreground">Ready</span></>
+                                                ) : deployment.is_build_success === false ? (
+                                                    <><XCircle className="w-4 h-4 text-red-500" /><span className="text-foreground">Failed</span></>
+                                                ) : (
+                                                    <><Clock className="w-4 h-4 text-yellow-500" /><span className="text-foreground">Building</span></>
+                                                )}
+                                            </div>
+                                            <div className="col-span-4 md:col-span-3 font-mono text-muted-foreground truncate pr-4">
+                                                {deployment.preview_url ? (
+                                                    <a href={formatVisitUrl(deployment.preview_url)} target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors hover:underline flex items-center gap-1.5">
+                                                        <span className="truncate">{deployment.preview_url}</span>
+                                                        <ExternalLink className="w-3 h-3 opacity-70 flex-shrink-0" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="opacity-50">-</span>
+                                                )}
+                                            </div>
+                                            <div className="hidden md:flex md:col-span-3 font-mono text-muted-foreground items-center gap-1.5 truncate">
+                                                <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+                                                <span className="truncate">{project.build_branch || "main"}</span>
+                                            </div>
+                                            <div className="col-span-3 md:col-span-2 text-muted-foreground text-right truncate text-xs flex items-center justify-end">
+                                                {new Date(deployment.created_at).toLocaleDateString()}
+                                            </div>
+                                            <div className=" md:col-span-1 flex items-center justify-end">
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                                            <Terminal className="w-4 h-4" />
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-6xl w-[95vw] h-[60vh] max-h-[90vh] flex flex-col bg-neutral-950 border-neutral-800">
+                                                        <DialogHeader>
+                                                            <DialogTitle className="flex items-center gap-2">
+                                                                <Terminal className="w-5 h-5" /> 
+                                                                Build Logs
+                                                            </DialogTitle>
+                                                            <DialogDescription>
+                                                                Deployment ID: {deployment.deployment_id}
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="flex-1 overflow-y-auto bg-black p-4 rounded-md border border-neutral-800 font-mono text-xs text-neutral-300 whitespace-pre-wrap">
+                                                            {deployment.build_logs || "No build logs available."}
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 border border-dashed border-border rounded-lg bg-neutral-900/20">
+                                <p className="text-sm text-muted-foreground">No deployment history available.</p>
                             </div>
                         )}
                     </CardContent>
