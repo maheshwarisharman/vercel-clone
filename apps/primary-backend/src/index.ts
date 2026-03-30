@@ -5,6 +5,7 @@ import { clerkMiddleware, requireAuth, getAuth } from "@clerk/express";
 
 // v1 Routes
 import githubRoutes from "./routes/githubRoutes.js";
+import customDomainRoutes from "./routes/customDomain.js";
 import deployProjectRoutes from "./routes/deployProject.js";
 import domainRoutes from "./routes/domainRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
@@ -89,6 +90,9 @@ app.post("/add-user", requireAuth(), async (req: Request, res: Response) => {
 app.use("/github", githubRoutes);
 app.use("/deploy", requireAuth(), deployProjectRoutes);
 app.use("/domain", requireAuth(), domainRoutes);
+
+//TODO: Configure authentication on custom domain Route
+app.use('/custom-domain', customDomainRoutes);
 app.use("/projects", requireAuth(), projectRoutes);
 
 app.listen(4000, () => {
