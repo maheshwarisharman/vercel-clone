@@ -4,10 +4,19 @@ import { attachDomainToCloudFront, getCertificateDetails } from "./awsCustomDoma
 export async function handleAcmCertCron(domain_id: string, cert_arn: string, cert_cname_key: string | null, domain: string) {
     
         const { status, cnameKey, cnameValue } = await getCertificateDetails(cert_arn);
+        console.log({ status, cnameKey, cnameValue });
 
         if (status === "ISSUED") {
           try {
             await attachDomainToCloudFront(domain, cert_arn);
+            await prisma.customDomain.update({
+                where: {
+                    id: domain_id
+                },
+                data: {
+                    status: "ACTIVE"
+                }
+            })
           } catch (error) {
             console.error(error);
             throw error;
@@ -42,5 +51,5 @@ export function ACMCronJob() {
     })
     await Promise.allSettled(pendingDomains.map(domain => handleAcmCertCron(domain.id, domain.cert_arn as string, domain.cert_cname_key, domain.domain)))
       
-    }, 60000)
+    }, 6000)
 }
