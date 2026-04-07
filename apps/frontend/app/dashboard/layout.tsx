@@ -57,24 +57,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Secondary Navigation (Tabs) */}
-        <div className="border-t border-border bg-background/50">
-          <nav className="flex items-center gap-6 px-4 w-full max-w-7xl mx-auto overflow-x-auto no-scrollbar">
-            {['Overview', 'Integrations', 'Activity', 'Domains', 'Usage', 'Settings'].map((tab) => (
-              <Link
-                key={tab}
-                href="#"
-                className={`flex items-center text-[13px] h-11 transition-colors border-b-2 whitespace-nowrap px-1 ${
-                  tab === 'Overview' 
-                    ? 'border-foreground font-medium text-foreground' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {tab}
-              </Link>
-            ))}
-          </nav>
-        </div>
       </header>
 
       {/* Main Content Area */}
