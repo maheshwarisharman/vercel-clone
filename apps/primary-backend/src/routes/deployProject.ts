@@ -63,6 +63,68 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
     }
 })
 
+router.post('/mark-production', async (req, res) => {
+
+    const auth = getAuth(req);
+    const clerkUserId = auth.userId;
+
+
+    console.log("Clerk Id", clerkUserId)
+
+    if (!clerkUserId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    try {
+
+        await prisma.$transaction(async (tx) => {
+        const deployment = await tx.deployment.update({
+            where: {
+            deployment_id: req.body.deployment_id,
+            },
+            data: {
+            is_production: true,
+            },
+        });
+
+        const domain = await tx.domain.update({
+            where: {
+            domain_url: req.body.domain_url,
+            },
+            data: {
+            deployment_id: req.body.deployment_id,
+            },
+        });
+
+        return { deployment, domain };
+        });
+
+        if(req.body.is_custom_domain_present) {
+            const customDomain = await prisma.customDomain.update({
+                where: {
+                    domain: req.body.custom_domain
+                },
+                data: {
+                    deployment_id: req.body.deployment_id
+                }
+            })
+        }
+
+        res.status(200).json({
+            message: "Deployment marked as production",
+        })
+            
+    } catch (e) {
+        console.log(e)
+        res.status(500).json({
+            message: "Some Error occured",
+            error: e
+        })
+    }
+})
+
 router.post('/create-deployment', validate(createDeploymentSchema), async (req, res) => {
 
     const body = req.body
