@@ -31,6 +31,7 @@ import {
   Check,
   AlertTriangle,
   Trash2,
+  MoreVertical,
 } from "lucide-react";
 
 import {
@@ -41,6 +42,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
 type Deployment = {
@@ -49,6 +56,7 @@ type Deployment = {
   preview_url: string | null;
   created_at: string;
   build_logs: string | null;
+  is_production?: boolean;
 };
 
 type CustomDomainStatus =
@@ -110,6 +118,7 @@ export default function ProjectDetailsPage() {
   const [deleteConfirmPhrase, setDeleteConfirmPhrase] = useState("");
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isMarkingProduction, setIsMarkingProduction] = useState<number | null>(null);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -319,6 +328,47 @@ export default function ProjectDetailsPage() {
       setDeleteError(message);
     } finally {
       setIsDeletingProject(false);
+    }
+  };
+
+  const handleMarkProduction = async (deployment_id: number) => {
+    try {
+      setIsMarkingProduction(deployment_id);
+      const token = await getToken();
+      
+      const payload = {
+        deployment_id,
+        domain_url: project?.primary_domain,
+        is_custom_domain_present: customDomains.length > 0,
+        custom_domain: customDomains.length > 0 ? customDomains[0].domain : undefined,
+      };
+
+      await axios.post(`${API_BASE_URL}/deploy/mark-production`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (project) {
+        setProject({
+          ...project,
+          deployments: project.deployments?.map(dep => ({
+            ...dep,
+            is_production: dep.deployment_id === deployment_id
+          }))
+        });
+      }
+    } catch (err: unknown) {
+      console.error("Error marking as production:", err);
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message ||
+          err.message
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
+      alert("Failed to mark deployment as production: " + message);
+    } finally {
+      setIsMarkingProduction(null);
     }
   };
 
@@ -818,7 +868,7 @@ export default function ProjectDetailsPage() {
                     DATE
                   </div>
                   <div className="col-span-2 md:col-span-1 text-right">
-                    LOGS
+                    ACTIONS
                   </div>
                 </div>
                 <div className="divide-y divide-border">
@@ -832,8 +882,16 @@ export default function ProjectDetailsPage() {
                         <div className="col-span-3 md:col-span-3 flex items-center gap-2">
                           {deployment.is_build_success === true ? (
                             <>
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                              <span className="text-foreground">Ready</span>
+                              <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                              <span className="text-foreground mr-1">Ready</span>
+                              {deployment.is_production && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="bg-blue-500/10 text-blue-400 border-blue-500/20 px-1.5 py-0 h-[18px] text-[10px] pointer-events-none shrink-0"
+                                >
+                                  Prod
+                                </Badge>
+                              )}
                             </>
                           ) : deployment.is_build_success === false ? (
                             <>
@@ -873,7 +931,7 @@ export default function ProjectDetailsPage() {
                         <div className="col-span-3 md:col-span-2 text-muted-foreground text-right truncate text-xs flex items-center justify-end">
                           {new Date(deployment.created_at).toLocaleDateString()}
                         </div>
-                        <div className=" md:col-span-1 flex items-center justify-end">
+                        <div className=" md:col-span-1 flex items-center justify-end gap-1">
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button
@@ -900,6 +958,36 @@ export default function ProjectDetailsPage() {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                disabled={isMarkingProduction === deployment.deployment_id}
+                              >
+                                {isMarkingProduction === deployment.deployment_id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                ) : (
+                                  <MoreVertical className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-neutral-950 border-neutral-800 text-neutral-300">
+                              <DropdownMenuItem
+                                className="cursor-pointer text-sm focus:bg-neutral-900 focus:text-white"
+                                onClick={() => handleMarkProduction(deployment.deployment_id)}
+                                disabled={isMarkingProduction === deployment.deployment_id || !deployment.is_build_success}
+                              >
+                                {isMarkingProduction === deployment.deployment_id ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Globe className="w-4 h-4 mr-2" />
+                                )}
+                                Mark as Production
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}

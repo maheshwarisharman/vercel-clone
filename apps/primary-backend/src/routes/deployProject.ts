@@ -17,7 +17,6 @@ router.post('/create-project', validate(createNewProjectSchema), async (req, res
     const clerkUserId = auth.userId;
 
 
-    console.log("Clerk Id", clerkUserId)
 
     if (!clerkUserId) {
       return res.status(401).json({

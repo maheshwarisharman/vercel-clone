@@ -8,8 +8,6 @@ router.get("/all", async (req, res) => {
   const auth = getAuth(req);
   const clerkUserId = auth.userId;
 
-  console.log("Clerk Id", clerkUserId);
-
   if (!clerkUserId) {
     return res.status(401).json({
       message: "Unauthorized",
