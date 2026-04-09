@@ -1,11 +1,25 @@
 import { neon } from '@neondatabase/serverless';
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 
 // Module-level cache — persists across warm invocations
 const cache = new Map();
 const CACHE_TTL_MS = 90_000; // 90 seconds
 
 const PLATFORM_DOMAIN = 'dev.blitznative.com';
-const DB_URL = process.env.DATABASE_URL;
+let DB_URL;
+
+async function getDBUrl() {
+    if (DB_URL) return DB_URL;
+    
+    const ssm = new SSMClient({ region: 'us-east-1' });
+    const { Parameter } = await ssm.send(new GetParameterCommand({
+        Name: '/devblitznative/DATABASE_URL',
+        WithDecryption: true
+    }));
+    DB_URL = Parameter.Value;
+    return DB_URL;
+}
+
 
 function getCached(key) {
     const entry = cache.get(key);
@@ -62,10 +76,11 @@ function rewriteUri(uri, deploymentId) {
 }
 
 export const handler = async (event) => {
+    const url = await getDBUrl();
     const request = event.Records[0].cf.request;
     const host = request.headers.host[0].value;
     const uri = request.uri;
-    const sql = neon(DB_URL);
+    const sql = neon(url);
 
     // PATH 1: raw deployment ID — host is like "14.dev.blitznative.com"
     const subdomain = host.split('.')[0];
