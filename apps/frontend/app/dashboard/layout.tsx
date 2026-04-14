@@ -1,4 +1,4 @@
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, ClerkProvider } from "@clerk/nextjs";
 import Link from "next/link";
 import { Search, Bell, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -52,7 +52,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Bell className="w-4 h-4" />
             </button>
             <div className="pl-2">
-              <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-8 h-8 rounded-full border border-border", userButtonPopoverCard: "bg-background border-border text-foreground" } }} />
+              <ClerkProvider afterSignOutUrl='/'>
+                <UserButton appearance={{ elements: { avatarBox: "w-8 h-8 rounded-full border border-border", userButtonPopoverCard: "bg-background border-border text-foreground" } }} />
+              </ClerkProvider>
             </div>
           </div>
         </div>
