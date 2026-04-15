@@ -9,7 +9,7 @@ import customDomainRoutes from "./routes/customDomain.js";
 import deployProjectRoutes from "./routes/deployProject.js";
 import domainRoutes from "./routes/domainRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
-import { ACMCronJob } from "./handlers/acmCertCron.js";
+import { TenantStatusCronJob } from "./handlers/acmCertCron.js";
 
 const app: Express = express();
 
@@ -20,8 +20,8 @@ app.use(express.json());
 
 app.use(clerkMiddleware());
 
-// Start the ACM Polling Cron Job
-ACMCronJob();
+// Start the CloudFront Tenant Status Polling
+TenantStatusCronJob();
 
 app.get("/health", async (_req: Request, res: Response) => {
   res.json({

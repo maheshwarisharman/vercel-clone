@@ -60,23 +60,16 @@ type Deployment = {
 };
 
 type CustomDomainStatus =
-  | "AWAITING_DNS"
-  | "CERT_VALIDATING"
-  | "CERT_ISSUED"
-  | "CDN_UPDATING"
+  | "PENDING"
   | "ACTIVE"
   | "FAILED";
-
-type CertStatus = "PENDING" | "ISSUED" | "FAILED";
 
 type CustomDomain = {
   id: string;
   domain: string;
   project_id: number;
-  cert_status: CertStatus;
   status: CustomDomainStatus;
-  cert_cname_key: string | null;
-  cert_cname_value: string | null;
+  tenant_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -200,10 +193,7 @@ export default function ProjectDetailsPage() {
   }, [fetchCustomDomains]);
 
   const statusBadgeStyles: Record<CustomDomainStatus, string> = {
-    AWAITING_DNS: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-    CERT_VALIDATING: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-    CERT_ISSUED: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
-    CDN_UPDATING: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    PENDING: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     ACTIVE: "bg-green-500/10 text-green-500 border-green-500/20",
     FAILED: "bg-red-500/10 text-red-500 border-red-500/20",
   };
@@ -730,64 +720,87 @@ export default function ProjectDetailsPage() {
                         </Badge>
                       </div>
 
-                      <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
-                        <p className="text-xs text-yellow-500 font-medium mb-3">
-                          DNS configuration required
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                          <div className="text-muted-foreground">TYPE</div>
-                          <div className="text-muted-foreground">NAME</div>
-                          <div className="text-muted-foreground">VALUE</div>
+                      {domainItem.status === "PENDING" && (
+                        <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-5">
+                          <p className="text-xs text-yellow-500 font-medium mb-3">
+                            DNS configuration required — point your domain to CloudFront
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                            <div className="text-muted-foreground">TYPE</div>
+                            <div className="text-muted-foreground">NAME</div>
+                            <div className="text-muted-foreground">VALUE</div>
 
-                          <div className="font-mono text-foreground">CNAME</div>
-                          <div className="font-mono text-foreground break-all flex items-start gap-2">
-                            <span className="break-all flex-1">
-                              {domainItem.domain}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                              onClick={() =>
-                                handleCopy(
-                                  domainItem.domain,
-                                  `${domainItem.id}-name`,
-                                )
-                              }
-                            >
-                              {copiedValue === `${domainItem.id}-name` ? (
-                                <Check className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </Button>
+                            <div className="font-mono text-foreground">CNAME</div>
+                            <div className="font-mono text-foreground break-all flex items-start gap-2">
+                              <span className="break-all flex-1">
+                                {domainItem.domain}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() =>
+                                  handleCopy(
+                                    domainItem.domain,
+                                    `${domainItem.id}-name`,
+                                  )
+                                }
+                              >
+                                {copiedValue === `${domainItem.id}-name` ? (
+                                  <Check className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                            <div className="font-mono text-foreground break-all flex items-start gap-2">
+                              <span className="break-all flex-1">
+                                {process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || "your-distribution.cloudfront.net"}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() =>
+                                  handleCopy(
+                                    process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || "your-distribution.cloudfront.net",
+                                    `${domainItem.id}-value`,
+                                  )
+                                }
+                              >
+                                {copiedValue === `${domainItem.id}-value` ? (
+                                  <Check className="w-3.5 h-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="font-mono text-foreground break-all flex items-start gap-2">
-                            <span className="break-all flex-1">
-                              d16mcb60so9xo3.cloudfront.net
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                              onClick={() =>
-                                handleCopy(
-                                  "d16mcb60so9xo3.cloudfront.net",
-                                  `${domainItem.id}-value`,
-                                )
-                              }
-                            >
-                              {copiedValue === `${domainItem.id}-value` ? (
-                                <Check className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </Button>
-                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-3">
+                            Once DNS propagates, CloudFront will automatically issue and attach the SSL certificate.
+                          </p>
                         </div>
-                      </div>
+                      )}
+
+                      {domainItem.status === "ACTIVE" && (
+                        <div className="mt-4 rounded-lg border border-green-500/20 bg-green-500/5 p-3 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                          <p className="text-xs text-green-500 font-medium">
+                            Domain is active and serving traffic with SSL
+                          </p>
+                        </div>
+                      )}
+
+                      {domainItem.status === "FAILED" && (
+                        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                          <p className="text-xs text-red-500 font-medium">
+                            Domain setup failed. Please remove and try again.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

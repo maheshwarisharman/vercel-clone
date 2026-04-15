@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "@repo/db";
-import { requestCertificate } from "../handlers/awsCustomDomain.js";
+import { createDistributionTenant, deleteDistributionTenant } from "../handlers/awsCustomDomain.js";
 
 const router: Router = Router();
 
@@ -21,20 +21,30 @@ router.post("/add-new-domain", async (req, res) => {
     }
 
     const sanitizedDomain = sanitizeDomain(domain);
+    const tenantName = sanitizedDomain.replace(/[^a-zA-Z0-9.-]/g, "-");
 
-    const certificateArn = await requestCertificate(sanitizedDomain);
+    // Create a CloudFront Distribution Tenant with managed certificate
+    // CloudFront will auto-issue and auto-renew the SSL cert
+    const { tenantId, tenantArn } = await createDistributionTenant(
+      sanitizedDomain,
+      tenantName
+    );
 
     await prisma.customDomain.create({
       data: {
         domain: sanitizedDomain,
         project_id: Number(project_id),
-        cert_arn: certificateArn,
-        cert_status: "PENDING",
-        status: "AWAITING_DNS",
+        tenant_id: tenantId,
+        tenant_arn: tenantArn,
+        status: "PENDING",
       },
     });
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({
+      success: true,
+      message: `Distribution tenant created for ${sanitizedDomain}`,
+      dns_instruction: `Point ${sanitizedDomain} as a CNAME to your CloudFront distribution domain. CloudFront will automatically validate and issue the SSL certificate.`,
+    });
   } catch (error: any) {
     if (error?.code === "P2002") {
       return res.status(409).json({
@@ -42,8 +52,9 @@ router.post("/add-new-domain", async (req, res) => {
       });
     }
 
+    console.error("Error adding custom domain:", error);
     return res.status(500).json({
-      message: "Some error occured",
+      message: "Some error occurred",
       error: error,
     });
   }
@@ -70,10 +81,8 @@ router.get("/list/:project_id", async (req, res) => {
         id: true,
         domain: true,
         project_id: true,
-        cert_status: true,
         status: true,
-        cert_cname_key: true,
-        cert_cname_value: true,
+        tenant_id: true,
         created_at: true,
         updated_at: true,
       },
@@ -85,7 +94,44 @@ router.get("/list/:project_id", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Some error occured",
+      message: "Some error occurred",
+      error,
+    });
+  }
+});
+
+router.delete("/remove/:domain_id", async (req, res) => {
+  try {
+    const { domain_id } = req.params;
+
+    const customDomain = await prisma.customDomain.findUnique({
+      where: { id: domain_id },
+    });
+
+    if (!customDomain) {
+      return res.status(404).json({ message: "Domain not found" });
+    }
+
+    if (customDomain.tenant_id) {
+      try {
+        await deleteDistributionTenant(customDomain.tenant_id);
+      } catch (error: any) {
+        console.warn(`Could not delete tenant ${customDomain.tenant_id}:`, error.message);
+      }
+    }
+
+    await prisma.customDomain.delete({
+      where: { id: domain_id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Domain removed successfully",
+    });
+  } catch (error) {
+    console.error("Error removing custom domain:", error);
+    return res.status(500).json({
+      message: "Some error occurred",
       error,
     });
   }

@@ -1,55 +1,46 @@
 import { prisma } from "@repo/db";
-import { attachDomainToCloudFront, getCertificateDetails } from "./awsCustomDomain.js";
+import { getDistributionTenantStatus } from "./awsCustomDomain.js";
 
-export async function handleAcmCertCron(domain_id: string, cert_arn: string, cert_cname_key: string | null, domain: string) {
-    
-        const { status, cnameKey, cnameValue } = await getCertificateDetails(cert_arn);
-        console.log({ status, cnameKey, cnameValue });
+/**
+ * Polls CloudFront to check if PENDING distribution tenants have become active.
+ * 
+**/
+async function pollPendingTenants() {
+  const pendingDomains = await prisma.customDomain.findMany({
+    where: { status: "PENDING", tenant_id: { not: null } },
+  });
 
-        if (status === "ISSUED") {
-          try {
-            await attachDomainToCloudFront(domain, cert_arn);
-            await prisma.customDomain.update({
-                where: {
-                    id: domain_id
-                },
-                data: {
-                    status: "ACTIVE"
-                }
-            })
-          } catch (error) {
-            console.error(error);
-            throw error;
-          }
+  if (pendingDomains.length === 0) return;
+
+  await Promise.allSettled(
+    pendingDomains.map(async (domainRecord) => {
+      try {
+        const tenantStatus = await getDistributionTenantStatus(domainRecord.tenant_id!);
+        console.log(tenantStatus)
+
+        const allDomainsActive = tenantStatus.domains?.every(
+          (d) => d.status === "active"
+        );
+
+        if (allDomainsActive && tenantStatus.status === "Deployed") {
+          await prisma.customDomain.update({
+            where: { id: domainRecord.id },
+            data: { status: "ACTIVE" },
+          });
         }
-
-  
-        if (cnameKey && !cert_cname_key) {
-            try {
-            await prisma.customDomain.update({
-                where: {
-                    id: domain_id
-                },
-                data: {
-                    cert_cname_key: cnameKey,
-                    cert_cname_value: cnameValue
-                }
-            })
-            } catch (error) {
-                console.error
-                throw error
-            }
-        }
-    
+      } catch (error) {
+        console.error(`Error polling tenant for ${domainRecord.domain}:`, error);
+      }
+    })
+  );
 }
 
-export function ACMCronJob() {
+export function TenantStatusCronJob() {  
   setInterval(async () => {
-      
-    const pendingDomains = await prisma.customDomain.findMany({
-            where: { status: { in: ['AWAITING_DNS', 'CERT_VALIDATING'] } }
-    })
-    await Promise.allSettled(pendingDomains.map(domain => handleAcmCertCron(domain.id, domain.cert_arn as string, domain.cert_cname_key, domain.domain)))
-      
-    }, 6000)
+    try {
+      await pollPendingTenants();
+    } catch (error) {
+      console.error("TenantStatusCronJob error:", error);
+    }
+  }, 180_000); //180 seconds
 }
